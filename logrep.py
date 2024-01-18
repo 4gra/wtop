@@ -6,7 +6,7 @@ from __future__ import absolute_import, division, print_function
 from copy import copy
 from hashlib import md5 as md5
 from subprocess import call
-import ConfigParser
+import configparser as ConfigParser
 import calendar
 import distutils.sysconfig
 import fnmatch
