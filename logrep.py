@@ -2,7 +2,8 @@
 # vim: set fileencoding=utf-8 :
 
 # Standard library
-from __future__ import absolute_import, division, print_function
+from past.builtins import cmp, basestring
+from builtins import map, zip, str, filter, range, object
 from copy import copy
 from hashlib import md5 as md5
 from subprocess import call
@@ -19,7 +20,7 @@ import site
 import socket
 import sys
 import time
-import urllib
+import urllib.request, urllib.parse, urllib.error
 
 # Third-party
 try:
@@ -242,7 +243,7 @@ def lcase(s):
 # extract the necessary fields.
 def format2regexp(fmt, relevant_fields=()):
     re_d = re.compile("%[\>\<\!,\d]*([\}\{\w\-]+)")
-    directives = map(lcase, re_d.findall(fmt))
+    directives = list(map(lcase, re_d.findall(fmt)))
     colnames = list()
     pat = fmt
     for k in directives:
@@ -404,12 +405,12 @@ def listify(x):
 # apply the col_fns to the records
 def field_map(log, relevant_fields, col_fns):
     # get only the column functions that are necessary
-    relevant_col_fns = filter((lambda f: relevant_fields.intersection(f[1])),
-                              col_fns)
+    relevant_col_fns = list(filter((lambda f: relevant_fields.intersection(f[1])),
+                              col_fns))
     for record in log:
         for source_col, new_cols, fn in relevant_col_fns:
-            record.update(dict(zip(new_cols,
-                                   listify(fn(record.get(source_col, ""))))))
+            record.update(dict(list(zip(new_cols,
+                                   listify(fn(record.get(source_col, "")))))))
         yield record
 
 
@@ -420,11 +421,11 @@ def field_map(log, relevant_fields, col_fns):
 # two levels is ok for now and I'm too tired to write something recursive
 def field_dependencies(requested_fields):
     deps = set(requested_fields)
-    deps = set(flatten(map((lambda f: f[0:2]),
-                           filter((lambda f: deps.intersection(f[1])),
-                                  col_fns))))
-    deps = flatten(map((lambda f: f[0:2]),
-                       filter((lambda f: deps.intersection(f[1])), col_fns)))
+    deps = set(flatten(list(map((lambda f: f[0:2]),
+                           list(filter((lambda f: deps.intersection(f[1])),
+                                  col_fns))))))
+    deps = flatten(list(map((lambda f: f[0:2]),
+                       list(filter((lambda f: deps.intersection(f[1])), col_fns)))))
     return set(deps + list(requested_fields))
 
 
@@ -432,7 +433,7 @@ def apache_log(loglines, LOG_PATTERN, LOG_COLUMNS, relevant_fields):
     logpat = re.compile(LOG_PATTERN)
     groups = (logpat.search(line) for line in loglines)
     tuples = (g.groups() for g in groups if g)
-    log = (dict(zip(LOG_COLUMNS, t)) for t in tuples)
+    log = (dict(list(zip(LOG_COLUMNS, t))) for t in tuples)
     log = field_map(log, relevant_fields, col_fns)
     return log
 
@@ -477,11 +478,11 @@ if geocoder:
 
 def iis_field_map(log, relevant_fields, col_fns):
     # get only the column functions that are necessary
-    relevant_col_fns = filter((lambda f: relevant_fields.intersection(f[0])),
-                              iis_col_fns)
+    relevant_col_fns = list(filter((lambda f: relevant_fields.intersection(f[0])),
+                              iis_col_fns))
     for record in log:
         for new_cols, fn in relevant_col_fns:
-            record.update(dict(zip(new_cols, listify(fn(record)))))
+            record.update(dict(list(zip(new_cols, listify(fn(record))))))
         yield record
 
 
@@ -491,7 +492,7 @@ def iis_log(loglines, relevant_fields):
             "ref", "vhost", "status", "substatus", "win32_status", "bytes_in",
             "bytes", "msec")
     tuples = (line.split(" ") for line in loglines)
-    log = (dict(zip(cols, urllib.unquote_plus(t))) for t in tuples)
+    log = (dict(list(zip(cols, urllib.parse.unquote_plus(t)))) for t in tuples)
     log = iis_field_map(log, relevant_fields, iis_col_fns)
     return log
 ##########################################################################
@@ -621,7 +622,7 @@ class circular_buffer(list):
 
 
 # round-robin database that only reports stats for the last X given seconds.
-class rrd2:
+class rrd2(object):
     def __init__(self, length, window):
         self.length = length
         self.window = float(window)
@@ -730,7 +731,7 @@ def compile_orderby(commands):
     order_by = 0
     descending = True
     if len(c) > 1:
-        order_by = map(int, c[1].split(","))
+        order_by = list(map(int, c[1].split(",")))
     if len(c) > 2:
         descending = (c[2][0].lower() == "d")
     return limit, order_by, descending
@@ -789,7 +790,7 @@ def compile_filter(commands):
     # example. "100" becomes 100 if the example value is numeric. If the
     # operator is "~", the condition is compiled to a regular expression.
     def typecast(example):
-        castfns = dict([(k, type(v)) for k, v in example.iteritems()])
+        castfns = dict([(k, type(v)) for k, v in example.items()])
         ret = list()
         for key, op, value in conditions:
             if op[-1] == "~":
@@ -810,7 +811,7 @@ def compile_filter(commands):
 
     # the compiled function to be returned.
     def fn(lst):
-        first = lst.next()
+        first = next(lst)
         conditions = typecast(first)
         if predicate(first, conditions):    # bleh. generators.
             yield first
@@ -868,8 +869,7 @@ def apache_top_mode(reqs):
             rps, avg, cnt, stdev, sparkline, mn, mx = stats[c][0].stats()
             if rps < MIN_RPS or cnt < 2:
                 continue
-            x3, x4, x5, slow = map(lambda x: pretty_float(x.avg()),
-                                   stats[c][1:])
+            x3, x4, x5, slow = [pretty_float(x.avg()) for x in stats[c][1:]]
             buf.append("% 34s % 9s % 5d % 4d  %s % 5d % 7s % 7s % 7s % 7s" %
                        (c, pretty_float(rps), avg, mn, sparkline, mx, x3, x4,
                         x5, slow))
@@ -909,7 +909,7 @@ def keyfns(order_by):
 
 def sort_fn(order_by, descending, limit):
     key_fn, key_fn2 = keyfns(order_by)
-    return (lambda table: sorted(table.itervalues(), key=key_fn2,
+    return (lambda table: sorted(iter(table.values()), key=key_fn2,
                                  reverse=descending)[0:limit])
 
 
@@ -1046,7 +1046,7 @@ def calculate_aggregates(reqs, agg_fields, group_by, order_by=None, limit=0,
         if limit:
             running_list[key] = table[key]
             if cnt % SORT_BUFFER_LENGTH:
-                running_list = dict(sorted(running_list.iteritems(),
+                running_list = dict(sorted(iter(running_list.items()),
                                            key=key_fn,
                                            reverse=descending)[0:limit])
 
@@ -1064,7 +1064,7 @@ def calculate_aggregates(reqs, agg_fields, group_by, order_by=None, limit=0,
     # people want?
     if needed_post_fns:
         cnt = 0
-        for k in records.iterkeys():
+        for k in records.keys():
             for (fn, col_idx) in needed_post_fns:
                 records[k][col_idx] = post_fns[fn](k, col_idx,
                                                    records[k][col_idx][0],
@@ -1254,6 +1254,6 @@ def rrd_mode(reqs, step=5, msec_max=2000, hist_steps=10, hist_scale=100,
 
             create_graph("all", cur_time, 43200, rpslim, mseclim, "halfday")
 
-            for k in classes.keys():
+            for k in list(classes.keys()):
                 create_graph(k, cur_time, 1800, rpslim, mseclim, "brief")
             create_rrd_page(sorted(classes.keys()), rpslim, mseclim)

@@ -253,10 +253,10 @@ def runit():
 
     for o, v in opts:
         if o in ("-h", "-?", "--help"):
-            print cmd_options
+            print(cmd_options)
             sys.exit(0)
         if o in ("-V"):
-            print logrep.VERSION
+            print(logrep.VERSION)
             sys.exit(0)
         elif o in ("-m", "--mode"):
             MODE = v
@@ -406,7 +406,7 @@ def runit():
                                              agg_limit)
                     rows = sort_fn(records)
                 else:
-                    rows = records.values()
+                    rows = list(records.values())
 
                 logrep.agg_mode(rows, fmt)
 
